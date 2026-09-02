@@ -46,76 +46,61 @@ if "operators" not in st.session_state:
 # ---------- 生成裂项/拆项题目 ----------
 def generate_fraction_sequence():
     """生成适合裂项或通分的分数序列"""
-    # 随机选择题目类型
     question_type = random.choice(['fraction_series', 'fraction_ops', 'mixed_ops'])
     
     if question_type == 'fraction_series':
-        # 生成裂项序列: 1/(1*2) + 1/(2*3) + 1/(3*4) + ...
         length = random.randint(3, 5)
         numbers = []
         operators = []
         
         for i in range(length):
             if i == 0:
-                # 第一项: 1/(1*2)
                 denom = random.randint(1, 3)
                 numbers.append(Fraction(1, denom * (denom + 1)))
             else:
-                # 后续项: 1/(n*(n+1))
                 base = random.randint(2, 5)
                 numbers.append(Fraction(1, base * (base + 1)))
             operators.append('+')
         
-        # 确保最后是加法
         operators = operators[:-1] if operators else []
-        
         return numbers, operators
     
     elif question_type == 'fraction_ops':
-        # 生成复杂分数运算: 包含多个分数的加减
         length = random.randint(4, 6)
         numbers = []
         operators = []
         
-        # 生成分母不同的分数
         denominators = []
         for i in range(length):
             if i == 0:
                 den = random.randint(2, 8)
             else:
-                # 生成与前面不同的分母
                 den = random.randint(2, 8)
                 while den in denominators:
                     den = random.randint(2, 8)
             denominators.append(den)
             
-            # 分子在1到分母之间
             numerator = random.randint(1, den - 1)
-            # 有时让分子大于1
             if random.random() > 0.5:
                 numerator = random.randint(1, den * 2)
             numbers.append(Fraction(numerator, den))
         
-        # 随机加减
         for i in range(length - 1):
             operators.append(random.choice(['+', '-']))
         
         return numbers, operators
     
     else:  # mixed_ops
-        # 混合整数和分数
         length = random.randint(4, 6)
         numbers = []
         operators = []
         
         for i in range(length):
             if random.random() > 0.4:
-                # 分数
                 den = random.randint(2, 8)
                 numerator = random.randint(1, den * 2)
                 numbers.append(Fraction(numerator, den))
             else:
-                # 整数
                 numbers.append(random.randint(-8, 8))
             if i < length - 1:
                 operators.append(random.choice(['+', '-']))
@@ -124,27 +109,21 @@ def generate_fraction_sequence():
 
 def generate_question():
     """生成有理数混合运算题（支持多项和裂项）"""
-    # 随机选择生成方式
     if random.random() > 0.3:
-        # 使用裂项/通分题目
         numbers, operators = generate_fraction_sequence()
     else:
-        # 普通题目（包含整数、分数、小数）
         num_count = random.randint(4, 6)
         numbers = []
         operators = []
         
         for i in range(num_count):
             if random.random() > 0.5:
-                # 分数
                 den = random.randint(2, 8)
                 numerator = random.randint(1, den * 2)
-                # 有时用负数
                 if random.random() > 0.6:
                     numerator = -numerator
                 numbers.append(Fraction(numerator, den))
             else:
-                # 小数或整数
                 if random.random() > 0.5:
                     numbers.append(random.randint(-10, 10))
                 else:
@@ -173,11 +152,17 @@ def generate_question():
         else:
             final_result -= numbers[i+1]
     
+    # 确保最终结果是最简分数
+    if isinstance(final_result, Fraction):
+        final_result = final_result.limit_denominator()
+    
     return original_expr, numbers, operators, final_result
 
 def format_number(num):
     """格式化数字为字符串"""
     if isinstance(num, Fraction):
+        # 确保分数是最简形式
+        num = num.limit_denominator()
         if num.denominator == 1:
             return str(num.numerator)
         return f"{num.numerator}/{num.denominator}"
@@ -191,6 +176,7 @@ def format_number(num):
 def format_number_with_parenthesis(num):
     """格式化数字，负数加括号"""
     if isinstance(num, Fraction):
+        num = num.limit_denominator()
         if num < 0:
             return f"({format_number(num)})"
         return format_number(num)
@@ -216,6 +202,10 @@ def calculate_value(expr):
         expr_eval = re.sub(r'(\d+)/(\d+)', replace_fraction, expr)
         expr_eval = expr_eval.replace('(', '').replace(')', '')
         result = eval(expr_eval, namespace)
+        
+        # 如果是分数，确保最简形式
+        if isinstance(result, Fraction):
+            result = result.limit_denominator()
         return result
     except Exception as e:
         try:
@@ -225,9 +215,15 @@ def calculate_value(expr):
             return None
 
 def is_equal(value1, value2):
-    """比较两个值是否相等（处理浮点数精度问题）"""
+    """比较两个值是否相等（处理浮点数精度问题和分数约分）"""
     if value1 is None or value2 is None:
         return False
+    
+    # 如果是分数，先约分再比较
+    if isinstance(value1, Fraction):
+        value1 = value1.limit_denominator()
+    if isinstance(value2, Fraction):
+        value2 = value2.limit_denominator()
     
     if isinstance(value1, Fraction) and isinstance(value2, Fraction):
         return value1 == value2
@@ -265,6 +261,31 @@ def is_final_result(expr):
     pattern = r'^\-?\d+(\.\d+)?$|^\-?\d+/\d+$'
     return bool(re.match(pattern, expr_clean))
 
+def is_fraction_simplified(frac_str):
+    """检查分数是否已经是最简形式"""
+    # 处理负数
+    if frac_str.startswith('-'):
+        frac_str = frac_str[1:]
+    
+    if '/' not in frac_str:
+        return True
+    
+    parts = frac_str.split('/')
+    if len(parts) != 2:
+        return False
+    
+    try:
+        num = abs(int(parts[0].strip()))
+        den = int(parts[1].strip())
+        
+        if den == 0:
+            return False
+        
+        from math import gcd
+        return gcd(num, den) == 1
+    except:
+        return False
+
 def validate_step(step_str, prev_expression, final_result, steps_so_far):
     """验证每一步是否合理"""
     if '=' not in step_str:
@@ -286,6 +307,10 @@ def validate_step(step_str, prev_expression, final_result, steps_so_far):
         if right_value is None:
             return False, "表达式格式有误"
         
+        # 如果是分数，确保数值正确（不管是否约分）
+        if isinstance(right_value, Fraction):
+            right_value = right_value.limit_denominator()
+        
         if steps_so_far:
             last_step = steps_so_far[-1]
             last_step_parts = last_step.split('=')
@@ -298,10 +323,19 @@ def validate_step(step_str, prev_expression, final_result, steps_so_far):
             if prev_value is not None and not is_equal(right_value, prev_value):
                 return False, f"第一步计算有误，表达式的值应该保持不变（应为 {format_number(prev_value)}）"
         
+        # 检查是否已经是最终结果
         is_final = is_final_result(right_side)
-        if is_final and not is_equal(right_value, final_result):
-            expected_str = format_number(final_result)
-            return False, f"最终结果应该是 {expected_str}"
+        if is_final:
+            # 如果是分数，检查是否已经约分到最简
+            if '/' in right_side:
+                if not is_fraction_simplified(right_side):
+                    # 计算最简形式
+                    simplified = format_number(right_value)
+                    return False, f"分数 {right_side} 还没有约分到最简！最简形式是 {simplified}"
+            
+            if not is_equal(right_value, final_result):
+                expected_str = format_number(final_result)
+                return False, f"最终结果应该是 {expected_str}"
         
         return True, "正确", is_final
     except Exception as e:
@@ -392,12 +426,14 @@ def main():
     **📋 规则说明：**
     - 支持整数、分数（如 1/2）和小数（如 0.5）
     - 包含裂项、拆项和通分练习
-    - 可以保留分数和小数混用，最终结果可以用分数表示
+    - 可以保留分数和小数混用
+    - **重要：最终结果必须是最简分数！** 
+      - ✅ 正确：`-219/35`
+      - ❌ 错误：`-438/70`（还能约分）
     - 每一步都要逐步化简表达式（去括号、合并同类项、通分等）
     - 每一步必须包含等号 `=`
     - 负数可以用括号括起来，如 `(-3)` 或直接写 `-3`
     - 两个运算符不能直接相连（如 `-3+-5` 是错误的）
-    - 最后一步必须得到最终结果
     - 正确一步：怪物-1 HP
     - 错误一步：怪物反击，你被扣1分
     """)
@@ -432,7 +468,6 @@ def main():
         if st.session_state.final_result is not None:
             st.caption("💡 提示：逐步化简，每一步都要合理，最后得到结果")
             
-            # 判断题目类型并给出提示
             has_fraction = any(isinstance(n, Fraction) for n in st.session_state.numbers)
             has_decimal = any(isinstance(n, float) for n in st.session_state.numbers)
             
@@ -440,16 +475,19 @@ def main():
                 st.info("📌 多项运算，注意运算顺序，可以逐步合并")
             
             if has_fraction and has_decimal:
-                st.info("📌 包含分数和小数，可以混合使用，最终结果可以用分数表示")
+                st.info("📌 包含分数和小数，可以混合使用，最终结果必须是最简分数")
             elif has_fraction:
-                st.info("📌 包含分数，注意通分和约分，可以尝试裂项或拆项")
+                st.info("📌 包含分数，注意通分和约分，最终结果必须是最简分数")
             elif has_decimal:
                 st.info("📌 包含小数，注意小数点位置")
             
-            # 如果有多个分数，提示通分
             fraction_count = sum(1 for n in st.session_state.numbers if isinstance(n, Fraction))
             if fraction_count >= 3:
                 st.info(f"📌 包含 {fraction_count} 个分数，建议先通分再计算")
+            
+            # 显示最终结果的提示
+            expected = format_number(st.session_state.final_result)
+            st.info(f"🎯 最终结果（最简形式）：{expected}")
         
         if st.session_state.steps:
             st.write("**✅ 你的步骤：**")
@@ -483,9 +521,8 @@ def main():
             else:
                 st.info("💡 继续化简，可以合并同分母分数，或通分后合并")
                 
-            if st.session_state.final_result is not None:
-                expected = format_number(st.session_state.final_result)
-                st.caption(f"💡 最终结果应该是：{expected}")
+            st.warning("⚠️ 中间步骤可以不是最简分数，但最终结果必须是最简分数！")
+            st.caption("💡 例如：`-438/70` 还可以约分，应该写成 `-219/35`")
         else:
             st.balloons()
             st.success("🎊 所有步骤完成！怪物已倒！")
