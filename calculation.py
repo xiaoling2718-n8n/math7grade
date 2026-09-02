@@ -716,7 +716,7 @@ def reset_game():
     st.session_state.score = 0
     st.session_state.monster_defeated = False
     st.session_state.feedback = ""
-    st.session_state.done = Falsey
+    st.session_state.done = False
     st.session_state.penalty = False
     st.session_state.total_steps = 0
     st.session_state.original_expr = ""
