@@ -190,22 +190,49 @@ def fraction_to_mixed(frac):
 
 def replace_mixed_numbers(expr):
     """
-    将表达式中的所有带分数替换为假分数
-    例如：'9 19/100+1 1/4-4' -> '(919/100)+(5/4)-4'
+    将带分数转换成括号包围的假分数。
+
+    例如：
+        1 2/3   -> (5/3)
+        2 1/4   -> (9/4)
+        -1 2/3  -> (-5/3)
+
+    注意：
+        必须先处理带分数，再处理普通分数，
+        否则 1 2/3 可能被错误解析。
     """
-    def replace_match(match):
-        mixed = match.group(0)
-        result, _ = convert_mixed_to_improper(mixed)
-        if result is not None:
-            # 返回分数格式，用括号括起来避免运算顺序问题
-            return f"({result.numerator}/{result.denominator})"
-        return mixed
-    
-    # 查找所有带分数模式：整数 空格 分子/分母
-    # 注意：要匹配负号，但不匹配表达式中的减号
-    pattern = r'-?\d+\s+\d+/\d+'
-    replaced = re.sub(pattern, replace_match, expr)
-    return replaced
+
+    # 带分数：
+    # 1 2/3
+    # -1 2/3
+    # 12 3/5
+    pattern = re.compile(
+        r'(?<![\w.)])'
+        r'(-?\d+)\s+(\d+)\s*/\s*(\d+)'
+        r'(?![\w.(])'
+    )
+
+    def mixed_to_fraction(match):
+        whole = int(match.group(1))
+        numerator = int(match.group(2))
+        denominator = int(match.group(3))
+
+        if denominator == 0:
+            raise ValueError("分母不能为 0")
+
+        sign = -1 if whole < 0 else 1
+        whole_abs = abs(whole)
+
+        numerator_total = whole_abs * denominator + numerator
+        numerator_total *= sign
+
+        return f"({numerator_total}/{denominator})"
+
+    # 一直替换，直到没有带分数
+    while pattern.search(expr):
+        expr = pattern.sub(mixed_to_fraction, expr)
+
+    return expr
 
 def calculate_value(expr):
     """计算表达式的值，支持分数、小数和混合带分数"""
