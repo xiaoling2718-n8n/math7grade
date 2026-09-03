@@ -500,6 +500,55 @@ def format_number_with_parenthesis(num):
             return f"({num})"
         return str(num)
 
+# ---------- LaTeX 渲染函数 ----------
+def to_latex(expr):
+    """
+    将表达式转换为 LaTeX 格式
+    支持：分数、带分数
+    """
+    # 先处理带分数：整数 分子/分母 -> 整数 + \frac{分子}{分母}
+    def replace_mixed(match):
+        whole = match.group(1)
+        num = match.group(2)
+        den = match.group(3)
+        if whole.startswith('-'):
+            whole_abs = whole[1:]
+            return f"-\\left({whole_abs}+\\frac{{{num}}}{{{den}}}\\right)"
+        else:
+            return f"{whole}+\\frac{{{num}}}{{{den}}}"
+    
+    # 匹配带分数：整数 分子/分母
+    expr = re.sub(r'(-?\d+)\s+(\d+)/(\d+)', replace_mixed, expr)
+    
+    # 处理普通分数：分子/分母 -> \frac{分子}{分母}
+    def replace_fraction(match):
+        num = match.group(1)
+        den = match.group(2)
+        return f"\\frac{{{num}}}{{{den}}}"
+    
+    # 匹配分数，但跳过已经处理的带分数部分
+    expr = re.sub(r'(?<!\d)(\d+)/(\d+)', replace_fraction, expr)
+    
+    # 处理乘号和除号
+    expr = expr.replace('×', ' \\times ')
+    expr = expr.replace('÷', ' \\div ')
+    
+    # 处理空格
+    expr = re.sub(r'\s+', ' ', expr)
+    
+    return expr
+
+def to_latex_simple(expr):
+    """
+    简单转换，用于显示步骤
+    """
+    # 处理分数
+    expr = re.sub(r'(\d+)/(\d+)', r'\\frac{\1}{\2}', expr)
+    # 处理乘号
+    expr = expr.replace('×', ' \\times ')
+    expr = expr.replace('÷', ' \\div ')
+    return expr
+    
 def validate_step(step_str, prev_expression, final_result, steps_so_far):
     """
     验证学生的计算步骤。
@@ -813,6 +862,7 @@ def submit_step():
     st.session_state.step_input = ""
 
 # ---------- 显示界面 ----------
+# ---------- 显示界面 ----------
 def main():
     st.title("⚔️ 数学闯关 · 有理数计算")
     st.markdown("""
@@ -862,7 +912,8 @@ def main():
     else:
         st.subheader("📝 当前题目")
         original_expr = st.session_state.get("original_expr", "")
-        st.write(f"**计算：** `{original_expr}`")
+        # 使用 LaTeX 显示题目
+        st.latex(to_latex(original_expr))
         
         if st.session_state.final_result is not None:
             st.caption("💡 提示：逐步化简，每一步都要合理，最后得到结果")
@@ -887,7 +938,15 @@ def main():
         if st.session_state.steps:
             st.write("**✅ 你的步骤：**")
             for i, step in enumerate(st.session_state.steps):
-                st.success(f"第{i+1}步: {step}")
+                if step.startswith("="):
+                    step_content = step[1:].strip()
+                    try:
+                        step_latex = to_latex_simple(step_content)
+                        st.success(f"第{i+1}步: $= {step_latex}$")
+                    except:
+                        st.success(f"第{i+1}步: {step}")
+                else:
+                    st.success(f"第{i+1}步: {step}")
         
         if st.session_state.feedback:
             if "✅" in st.session_state.feedback or "🎉" in st.session_state.feedback:
